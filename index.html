@@ -415,7 +415,7 @@ function render(){
     if(istAbw){
       h+=`<div class="warnText" style="margin:8px 0 4px">⚠ ${wertNum}°C ist eine Abweichung</div>
         <input class="modalInput" type="text" value="${ed.massnahme}"
-          oninput="editFeld('massnahme',this.value)" placeholder="Korrekturmassnahme (optional)"/>`;
+          oninput="editFeld('massnahme',this.value)" placeholder="Korrekturmassnahme (Pflicht)"/>`;
     }
     h+=`<div class="modalBtns">
         <button class="modalCancel" onclick="editAbbrechen()">Abbrechen</button>
@@ -475,7 +475,8 @@ window.editSpeichern=async()=>{
   const g=GERAETE.find(x=>x.id===ed.geraet);
   const ok=istOk(g,wert);
   let mass=ed.massnahme.trim()||null;
-  // Korrekturmassnahme optional – kein Zwang mehr
+  // Beim Korrigieren: bei Abweichung ist eine Korrekturmassnahme Pflicht
+  if(ok===false && !mass){toast("Bei Abweichung bitte Korrekturmassnahme eingeben");return;}
   try{
     const {error}=await db.from("hygiene_temperatur")
       .update({wert:wert, im_soll:ok, massnahme:mass})
