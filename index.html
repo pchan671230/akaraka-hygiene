@@ -166,8 +166,9 @@ function toast(msg){const t=document.getElementById("toast");t.textContent=msg;t
 async function ladeMitarbeiter(){
   try{
     const {data,error}=await db.from("employees")
-      .select("name,vorname,archived,is_manager")
-      .eq("archived",false);
+      .select("name,vorname,archived,is_manager,standort")
+      .eq("archived",false)
+      .eq("standort","akaraka");   // nur Personal vom Hauptstandort Akaraka
     if(error) throw error;
     // Anzeige: "Vorname Name" (z. B. "Pyong-chin Han"); alphabetisch nach Vorname
     MITARBEITER=(data||[])
