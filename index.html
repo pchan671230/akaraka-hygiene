@@ -55,6 +55,9 @@
   .tempInput{width:80px;padding:10px 8px;font-size:26px;text-align:center;
     border:1px solid var(--linie);border-radius:10px;font-family:inherit;background:#fff;}
   .grad{font-size:18px;color:#6b655c;}
+  .vzBtn{width:40px;height:46px;border-radius:10px;border:1px solid var(--linie);background:#fff;
+    font-family:inherit;font-size:24px;font-weight:700;cursor:pointer;color:var(--tinte);flex-shrink:0;}
+  .vzBtn.minusOn{background:var(--akzent);color:#fff;border-color:var(--akzent);}
   .statusZeile{margin-top:8px;font-size:14px;}
   .okText{color:var(--gruen);font-weight:600;}
   .warnText{color:var(--rot);font-weight:700;}
@@ -291,6 +294,12 @@ function render(){
             <div class="inputWrap">`;
           if(schonDa){const r=state.heuteTemps.find(x=>x.geraet===g.id&&x.schicht===state.schicht);
             h+=`<span style="font-size:22px;font-weight:700">${r.wert}°</span>`;
+          }else if(g.typ==="tk"){
+            // Tiefkühler: Vorzeichen-Umschalter (−/+), Eingabe als Betrag
+            const minus = e.minus!==false; // Standard: minus an (Tiefkühler ist immer Minusgrad)
+            h+=`<button class="vzBtn ${minus?'minusOn':''}" onclick="toggleVorzeichen('${g.id}')">${minus?'−':'+'}</button>
+              <input class="tempInput" type="number" inputmode="decimal" value="${e.betrag??''}"
+              oninput="setTempBetrag('${g.id}',this.value)" placeholder="—"/><span class="grad">°C</span>`;
           }else{
             h+=`<input class="tempInput" type="number" inputmode="decimal" value="${e.wert??''}"
               oninput="setTempWert('${g.id}',this.value)" placeholder="—"/><span class="grad">°C</span>`;
@@ -365,6 +374,23 @@ window.setSchicht=id=>{state.schicht=id;state.tab="aufgaben";render();};
 window.setPerson=m=>{state.person=m;render();};
 window.setTab=t=>{state.tab=t;if(t==="log")ladeVerlauf();else render();};
 window.setTempWert=(id,v)=>{state.temps[id]={...state.temps[id],wert:v};render();};
+// Tiefkühler: Betrag eingeben, Vorzeichen per Button → echter Wert wird berechnet
+window.setTempBetrag=(id,v)=>{
+  const cur=state.temps[id]||{};
+  const minus=cur.minus!==false;
+  const betrag=v;
+  const wert = (betrag===""||betrag==null) ? "" : (minus? -Math.abs(+betrag) : Math.abs(+betrag));
+  state.temps[id]={...cur,betrag,minus,wert:wert===""?"":String(wert)};
+  render();
+};
+window.toggleVorzeichen=(id)=>{
+  const cur=state.temps[id]||{};
+  const minus=!(cur.minus!==false); // umschalten
+  const betrag=cur.betrag;
+  const wert = (betrag===""||betrag==null) ? "" : (minus? -Math.abs(+betrag) : Math.abs(+betrag));
+  state.temps[id]={...cur,minus,betrag,wert:wert===""?"":String(wert)};
+  render();
+};
 window.setTempMass=(id,v)=>{state.temps[id]={...state.temps[id],massnahme:v};};
 window.toggleClean=(id,sch,text)=>{if(istHeuteCleanDa(sch,text))return;state.clean[id]=!state.clean[id];render();};
 window.speichern=speichern;window.ladeVerlauf=ladeVerlauf;window.exportCSV=exportCSV;window.state=state;
