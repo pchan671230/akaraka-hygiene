@@ -109,6 +109,10 @@ const SUPABASE_URL = "https://brnhxzpvrfglbidxircy.supabase.co";
 const SUPABASE_KEY = "sb_publishable_Og6PFe57FIzFUKtfODqyJQ_PmqO29Nf";
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+// Standort dieses Apps: 'akaraka' (Hauptstandort) | 'aka2go' (To-Go)
+// → Bei der To-Go-Version nur diese eine Zeile auf 'aka2go' ändern.
+const STANDORT = "akaraka";
+
 // --- Stammdaten ---
 const GERAETE = [
   {id:"KÜ-KS01",typ:"kuehl",min:1,max:5},{id:"KÜ-KS02",typ:"kuehl",min:1,max:5},
@@ -187,8 +191,8 @@ async function ladeMitarbeiter(){
 async function ladeHeute(){
   try{
     const heute=isoToday();
-    const {data:t}=await db.from("hygiene_temperatur").select("*").eq("datum",heute);
-    const {data:c}=await db.from("hygiene_reinigung").select("*").eq("datum",heute);
+    const {data:t}=await db.from("hygiene_temperatur").select("*").eq("datum",heute).eq("standort",STANDORT);
+    const {data:c}=await db.from("hygiene_reinigung").select("*").eq("datum",heute).eq("standort",STANDORT);
     state.heuteTemps=t||[]; state.heuteClean=c||[]; state.online=true;
   }catch(e){state.online=false;}
   render();
@@ -198,8 +202,10 @@ async function ladeHeute(){
 async function ladeVerlauf(){
   try{
     const {data:t}=await db.from("hygiene_temperatur").select("*")
+      .eq("standort",STANDORT)
       .gte("datum",state.logVon).lte("datum",state.logBis).order("erstellt_am",{ascending:false});
     const {data:c}=await db.from("hygiene_reinigung").select("*")
+      .eq("standort",STANDORT)
       .gte("datum",state.logVon).lte("datum",state.logBis).order("erstellt_am",{ascending:false});
     state.logData={temps:t||[],clean:c||[]}; state.online=true;
   }catch(e){state.online=false; toast("Keine Verbindung");}
@@ -222,13 +228,13 @@ async function speichern(){
     const tRows=GERAETE.filter(g=>state.temps[g.id]?.wert!=null && state.temps[g.id]?.wert!=="")
       .map(g=>({datum:heute,schicht:sch.id,mitarbeiter:state.person,geraet:g.id,
         wert:+state.temps[g.id].wert, im_soll:istOk(g,state.temps[g.id].wert),
-        massnahme:state.temps[g.id].massnahme||null}));
+        massnahme:state.temps[g.id].massnahme||null, standort:STANDORT}));
     if(tRows.length) {const {error}=await db.from("hygiene_temperatur").insert(tRows); if(error)throw error;}
     // Reinigung (alle angehakten dieser Schicht, die noch nicht in DB sind)
     const items=sch.blocks.filter(b=>b.art==="check").flatMap(b=>b.items);
     const cRows=items.filter(i=>state.clean[i.id] && !istHeuteCleanDa(sch.id,i.text))
       .map(i=>({datum:heute,schicht:sch.id,mitarbeiter:state.person,aufgabe:i.text,
-        erledigt:true, bemerkung:state.bemerkung.trim()||null}));
+        erledigt:true, bemerkung:state.bemerkung.trim()||null, standort:STANDORT}));
     if(cRows.length){const {error}=await db.from("hygiene_reinigung").insert(cRows); if(error)throw error;}
     state.temps={}; state.clean={}; state.bemerkung="";
     toast(sch.id+" gespeichert ✓");
