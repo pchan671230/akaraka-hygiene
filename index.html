@@ -96,6 +96,20 @@
     transition:opacity .3s;pointer-events:none;max-width:90%;}
   .toast.show{opacity:1;}
   .foot{text-align:center;font-size:12px;color:#aaa39a;padding:20px 10px 0;font-style:italic;}
+  .modalBg{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:50;}
+  .modal{position:fixed;z-index:51;left:50%;top:50%;transform:translate(-50%,-50%);
+    width:88%;max-width:360px;background:var(--karte);border-radius:16px;padding:22px 20px;
+    box-shadow:0 10px 40px rgba(0,0,0,.3);}
+  .modalTitel{font-size:20px;font-weight:700;color:var(--akzent);}
+  .modalSoll{font-size:13px;color:var(--grau);margin:4px 0 16px;}
+  .modalLabel{display:block;font-size:13px;color:var(--grau);margin:12px 0 4px;text-transform:uppercase;letter-spacing:1px;}
+  .modalInput{width:100%;padding:13px;font-size:17px;border:1px solid var(--linie);border-radius:10px;
+    font-family:inherit;box-sizing:border-box;background:#fcfbf8;}
+  .modalBtns{display:flex;gap:10px;margin-top:20px;}
+  .modalCancel{flex:1;padding:14px;border:1px solid var(--linie);background:#fff;border-radius:10px;
+    font-family:inherit;font-size:16px;cursor:pointer;color:var(--tinte);}
+  .modalOk{flex:1;padding:14px;border:none;background:var(--akzent);color:#fff;border-radius:10px;
+    font-family:inherit;font-size:16px;font-weight:700;cursor:pointer;}
   .syncDot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--gruen);margin-right:6px;}
   .syncDot.off{background:var(--rot);}
 </style>
@@ -157,7 +171,7 @@ let MANAGER_PINS=[]; // PINs der Manager – für das Bearbeiten gesperrter Eint
 // --- Zustand ---
 let state={
   schicht:SCHICHTEN[0].id, person:"", tab:"aufgaben",
-  temps:{}, clean:{}, bemerkung:"",
+  temps:{}, clean:{}, bemerkung:"", edit:null,
   heuteTemps:[], heuteClean:[],  // bereits heute gespeicherte (aus DB)
   logVon:isoDaysAgo(7), logBis:isoToday(), logData:{temps:[],clean:[]}, online:true,
 };
@@ -307,13 +321,14 @@ function render(){
         h+=`<div class="gruppeKopf">${b.titel}</div>`;
         GERAETE.forEach(g=>{
           const schonDa=istHeuteTempDa(g.id);
+          const r0=schonDa?state.heuteTemps.find(x=>x.geraet===g.id&&x.schicht===state.schicht):null;
           const e=state.temps[g.id]||{};
-          const ok=schonDa?true:istOk(g,e.wert);
+          const ok=schonDa?(r0.im_soll===true):istOk(g,e.wert);
           const cls=ok===true?"ok":ok===false?"warn":"";
           h+=`<div class="card ${cls}"><div class="cardTop"><div>
             <div class="geraetId">${g.id}</div><div class="soll">Soll: ${sollText(g)}</div></div>
             <div class="inputWrap">`;
-          if(schonDa){const r=state.heuteTemps.find(x=>x.geraet===g.id&&x.schicht===state.schicht);
+          if(schonDa){const r=r0;
             h+=`<span style="font-size:22px;font-weight:700">${r.wert}°</span>
               <button class="editBtn" onclick="managerEdit(${r.id},'${g.id}',${r.wert})" title="Korrektur (nur Manager)">✎</button>`;
           }else if(g.typ==="tk"){
@@ -327,8 +342,11 @@ function render(){
               oninput="setTempWert('${g.id}',this.value)" onchange="commitTemp()" placeholder="—"/><span class="grad">°C</span>`;
           }
           h+=`</div></div><div class="statusZeile">`;
-          if(schonDa){const r=state.heuteTemps.find(x=>x.geraet===g.id&&x.schicht===state.schicht);
-            h+=`<span class="okText">✓ erfasst von ${r.mitarbeiter}</span>`;}
+          if(schonDa){const r=r0;
+            if(r.im_soll===false){h+=`<span class="warnText">⚠ Abweichung! – erfasst von ${r.mitarbeiter}</span>`;}
+            else{h+=`<span class="okText">✓ erfasst von ${r.mitarbeiter}</span>`;}
+            if(r.im_soll===false && r.massnahme){h+=`<div style="font-size:13px;color:#6b655c;margin-top:4px">↳ ${r.massnahme}</div>`;}
+          }
           else if(ok===true)h+=`<span class="okText">✓ im Sollbereich</span>`;
           else if(ok===false)h+=`<span class="warnText">⚠ Abweichung!</span>`;
           else h+=`<span class="leerText">noch nicht gemessen</span>`;
@@ -379,6 +397,34 @@ function render(){
     });
   }
   h+=`</div><div class="foot">AKARAKA Hygiene-Kontrolle · Daten in Supabase gespeichert</div>`;
+
+  // --- Manager-Korrektur-Fenster (Modal) ---
+  if(state.edit){
+    const ed=state.edit;
+    const g=GERAETE.find(x=>x.id===ed.geraet);
+    const wertNum=Number(ed.wert);
+    const istAbw = ed.wert!=="" && !isNaN(wertNum) && istOk(g,wertNum)===false;
+    h+=`<div class="modalBg" onclick="editAbbrechen()"></div>
+      <div class="modal">
+        <div class="modalTitel">Korrektur · ${ed.geraet}</div>
+        <div class="modalSoll">Soll: ${sollText(g)} · gespeichert: ${ed.altWert}°C</div>
+        <label class="modalLabel">Manager-PIN</label>
+        <input class="modalInput" type="password" inputmode="numeric" value="${ed.pin}"
+          oninput="editFeld('pin',this.value)" placeholder="PIN" autocomplete="off"/>
+        <label class="modalLabel">Neue Temperatur (°C)</label>
+        <input class="modalInput" type="number" inputmode="decimal" value="${ed.wert}"
+          oninput="editFeld('wert',this.value)" placeholder="z. B. -18"/>`;
+    if(istAbw){
+      h+=`<div class="warnText" style="margin:8px 0 4px">⚠ ${wertNum}°C ist eine Abweichung</div>
+        <input class="modalInput" type="text" value="${ed.massnahme}"
+          oninput="editFeld('massnahme',this.value)" placeholder="Korrekturmassnahme (Pflicht)"/>`;
+    }
+    h+=`<div class="modalBtns">
+        <button class="modalCancel" onclick="editAbbrechen()">Abbrechen</button>
+        <button class="modalOk" onclick="editSpeichern()">Speichern</button>
+      </div></div>`;
+  }
+
   document.getElementById("app").innerHTML=h;
 }
 function fortschritt(){
@@ -416,27 +462,28 @@ window.toggleVorzeichen=(id)=>{
   render();
 };
 window.setTempMass=(id,v)=>{state.temps[id]={...state.temps[id],massnahme:v};};
-// Manager-Korrektur eines gesperrten Temperatur-Eintrags (PIN-geschützt)
-window.managerEdit=async(rowId,geraet,altWert)=>{
-  const pin=prompt(`Korrektur für ${geraet} (gespeichert: ${altWert}°C)\n\nNur Manager: bitte PIN eingeben`);
-  if(pin===null) return;                       // abgebrochen
-  if(!MANAGER_PINS.includes(String(pin).trim())){toast("Falsche PIN – keine Berechtigung");return;}
-  const neu=prompt(`Neue Temperatur für ${geraet} in °C\n(Minusgrad mit − eingeben, z. B. -18)`, String(altWert));
-  if(neu===null||neu.trim()==="") return;
-  const wert=Number(neu);
-  if(isNaN(wert)){toast("Ungültige Zahl");return;}
-  const g=GERAETE.find(x=>x.id===geraet);
+// Manager-Korrektur: öffnet ein In-App-Fenster (funktioniert auch auf iPhone)
+window.managerEdit=(rowId,geraet,altWert)=>{
+  state.edit={rowId,geraet,altWert,pin:"",wert:String(altWert),massnahme:""};
+  render();
+};
+window.editFeld=(feld,v)=>{ if(state.edit) state.edit[feld]=v; };
+window.editAbbrechen=()=>{ state.edit=null; render(); };
+window.editSpeichern=async()=>{
+  const ed=state.edit; if(!ed) return;
+  if(!MANAGER_PINS.includes(String(ed.pin).trim())){toast("Falsche PIN – keine Berechtigung");return;}
+  const wert=Number(ed.wert);
+  if(ed.wert===""||isNaN(wert)){toast("Ungültige Zahl");return;}
+  const g=GERAETE.find(x=>x.id===ed.geraet);
   const ok=istOk(g,wert);
-  let mass=null;
-  if(ok===false){
-    mass=prompt(`${wert}°C ist eine Abweichung!\nKorrekturmassnahme eingeben (Pflicht):`);
-    if(mass===null||mass.trim()===""){toast("Korrekturmassnahme erforderlich – nicht geändert");return;}
-  }
+  let mass=ed.massnahme.trim()||null;
+  if(ok===false && !mass){toast("Korrekturmassnahme erforderlich");return;}
   try{
     const {error}=await db.from("hygiene_temperatur")
       .update({wert:wert, im_soll:ok, massnahme:mass})
-      .eq("id",rowId);
+      .eq("id",ed.rowId);
     if(error) throw error;
+    state.edit=null;
     toast("Korrektur gespeichert ✓");
     await ladeHeute();
   }catch(e){toast("Fehler bei der Korrektur");}
