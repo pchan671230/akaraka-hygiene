@@ -411,7 +411,7 @@ function render(){
           oninput="editFeld('pin',this.value)" placeholder="PIN" autocomplete="off"/>
         <label class="modalLabel">Neue Temperatur (°C)</label>
         <input class="modalInput" type="number" inputmode="decimal" value="${ed.wert}"
-          oninput="editFeld('wert',this.value)" placeholder="z. B. -18"/>`;
+          oninput="editFeld('wert',this.value)" onchange="editRefresh()" placeholder="z. B. -18"/>`;
     if(istAbw){
       h+=`<div class="warnText" style="margin:8px 0 4px">⚠ ${wertNum}°C ist eine Abweichung</div>
         <input class="modalInput" type="text" value="${ed.massnahme}"
@@ -466,6 +466,7 @@ window.managerEdit=(rowId,geraet,altWert)=>{
   render();
 };
 window.editFeld=(feld,v)=>{ if(state.edit) state.edit[feld]=v; };
+window.editRefresh=()=>{ if(state.edit) render(); }; // nach Temperatur-Eingabe: Massnahme-Feld ein-/ausblenden
 window.editAbbrechen=()=>{ state.edit=null; render(); };
 window.editSpeichern=async()=>{
   const ed=state.edit; if(!ed) return;
