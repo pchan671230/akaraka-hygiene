@@ -242,9 +242,7 @@ async function speichern(){
   const eingegebene = hatTemp()
     ? GERAETE.filter(g=>state.temps[g.id]?.wert!=null && state.temps[g.id]?.wert!=="")
     : [];
-  // Bei eingegebener Abweichung ist Korrekturmassnahme Pflicht
-  const ohneMass = eingegebene.filter(g=>istOk(g,state.temps[g.id].wert)===false && !state.temps[g.id].massnahme);
-  if(ohneMass.length>0){toast("Korrekturmassnahme Pflicht bei: "+ohneMass.map(g=>g.id).join(", "));return;}
+  // Abweichung: Korrekturmassnahme ist optional (kann, muss aber nicht eingegeben werden)
   // Gibt es überhaupt etwas Neues zu speichern?
   const neueClean = sch.blocks.filter(b=>b.art==="check").flatMap(b=>b.items)
     .filter(i=>state.clean[i.id] && !istHeuteCleanDa(sch.id,i.text));
@@ -352,7 +350,7 @@ function render(){
           else h+=`<span class="leerText">noch nicht gemessen</span>`;
           h+=`</div>`;
           if(!schonDa&&ok===false){h+=`<input class="massnahmeInput" type="text" value="${e.massnahme??''}"
-            oninput="setTempMass('${g.id}',this.value)" placeholder="Korrekturmassnahme (z. B. Tür geprüft, Techniker informiert)"/>`;}
+            oninput="setTempMass('${g.id}',this.value)" placeholder="Korrekturmassnahme (optional, z. B. Tür geprüft)"/>`;}
           h+=`</div>`;
         });
       }else{
@@ -417,7 +415,7 @@ function render(){
     if(istAbw){
       h+=`<div class="warnText" style="margin:8px 0 4px">⚠ ${wertNum}°C ist eine Abweichung</div>
         <input class="modalInput" type="text" value="${ed.massnahme}"
-          oninput="editFeld('massnahme',this.value)" placeholder="Korrekturmassnahme (Pflicht)"/>`;
+          oninput="editFeld('massnahme',this.value)" placeholder="Korrekturmassnahme (optional)"/>`;
     }
     h+=`<div class="modalBtns">
         <button class="modalCancel" onclick="editAbbrechen()">Abbrechen</button>
@@ -477,7 +475,7 @@ window.editSpeichern=async()=>{
   const g=GERAETE.find(x=>x.id===ed.geraet);
   const ok=istOk(g,wert);
   let mass=ed.massnahme.trim()||null;
-  if(ok===false && !mass){toast("Korrekturmassnahme erforderlich");return;}
+  // Korrekturmassnahme optional – kein Zwang mehr
   try{
     const {error}=await db.from("hygiene_temperatur")
       .update({wert:wert, im_soll:ok, massnahme:mass})
