@@ -29,8 +29,8 @@
   .schichtLabel{font-size:15px;font-weight:700;}
   .schichtZeit{font-size:11px;opacity:.7;}
   .personRow{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;}
-  .personBtn{flex:1 0 40%;padding:10px 8px;border-radius:10px;border:1px solid var(--linie);
-    background:var(--karte);font-family:inherit;font-size:15px;cursor:pointer;color:var(--tinte);}
+  .personBtn{flex:1 0 28%;padding:9px 6px;border-radius:10px;border:1px solid var(--linie);
+    background:var(--karte);font-family:inherit;font-size:14px;cursor:pointer;color:var(--tinte);text-align:center;}
   .personBtn.on{background:var(--akzent);color:#fff;border-color:var(--akzent);}
   .tabs{display:flex;gap:6px;padding:12px 12px 0;}
   .tab{flex:1;padding:12px 4px;border:none;border-radius:10px 10px 0 0;background:transparent;
@@ -140,11 +140,12 @@ const SCHICHTEN=[
   {id:"Öffnung Abend",zeit:"vor dem Abend",blocks:[{titel:"Gastraum vorbereiten",art:"check",items:HALLE}]},
   {id:"Schluss Abend",zeit:"Tagesende",blocks:[{titel:"Küche reinigen",art:"check",items:KUECHE},{titel:"Getränke & Auffüllen",art:"check",items:GETRAENKE},{titel:"Sicherheit / Abschluss",art:"check",items:ABSCHLUSS}]},
 ];
-const MITARBEITER=["Han","Mitarbeiter A","Mitarbeiter B","Mitarbeiter C"];
+// Mitarbeiter werden aus der Supabase-Tabelle 'employees' geladen (siehe ladeMitarbeiter)
+let MITARBEITER=[];
 
 // --- Zustand ---
 let state={
-  schicht:SCHICHTEN[0].id, person:MITARBEITER[0], tab:"aufgaben",
+  schicht:SCHICHTEN[0].id, person:"", tab:"aufgaben",
   temps:{}, clean:{}, bemerkung:"",
   heuteTemps:[], heuteClean:[],  // bereits heute gespeicherte (aus DB)
   logVon:isoDaysAgo(7), logBis:isoToday(), logData:{temps:[],clean:[]}, online:true,
@@ -157,6 +158,26 @@ function istOk(g,w){if(w===""||w==null||isNaN(w))return null;const n=+w;return g
 function schicht(){return SCHICHTEN.find(s=>s.id===state.schicht);}
 function hatTemp(){return schicht().blocks.some(b=>b.art==="temp");}
 function toast(msg){const t=document.getElementById("toast");t.textContent=msg;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),2600);}
+
+// --- DB: Mitarbeiter aus 'employees' laden (nur aktive, nicht archivierte) ---
+async function ladeMitarbeiter(){
+  try{
+    const {data,error}=await db.from("employees")
+      .select("name,vorname,archived,is_manager")
+      .eq("archived",false);
+    if(error) throw error;
+    // Anzeige: "Vorname Name" (z. B. "Pyong-chin Han"); alphabetisch nach Vorname
+    MITARBEITER=(data||[])
+      .map(e=>`${(e.vorname||"").trim()} ${(e.name||"").trim()}`.trim())
+      .filter(n=>n.length>0)
+      .sort((a,b)=>a.localeCompare(b,"de"));
+    state.online=true;
+  }catch(e){
+    state.online=false;
+    MITARBEITER=[]; // bei Fehler leer – Hinweis wird im Render angezeigt
+  }
+  render();
+}
 
 // --- DB: heute schon erledigte Aufgaben laden (für Teilen/Aufteilen) ---
 async function ladeHeute(){
@@ -184,6 +205,7 @@ async function ladeVerlauf(){
 // --- Speichern ---
 async function speichern(){
   const sch=schicht();
+  if(!state.person){toast("Bitte zuerst Mitarbeiter:in auswählen");return;}
   if(hatTemp()){
     const fehlend=GERAETE.filter(g=>!state.temps[g.id]?.wert && !istHeuteTempDa(g.id));
     const ohneMass=GERAETE.filter(g=>istOk(g,state.temps[g.id]?.wert)===false && !state.temps[g.id]?.massnahme);
@@ -239,7 +261,11 @@ function render(){
 
   // Person
   h+=`<div class="block"><span class="label">Mitarbeiter:in</span><div class="personRow">`;
-  MITARBEITER.forEach(m=>{h+=`<button class="personBtn ${m===state.person?'on':''}" onclick="setPerson('${m}')">${m}</button>`;});
+  if(MITARBEITER.length===0){
+    h+=`<span class="hint" style="padding:8px 2px">Mitarbeiter werden geladen … (oder keine Verbindung)</span>`;
+  }else{
+    MITARBEITER.forEach(m=>{h+=`<button class="personBtn ${m===state.person?'on':''}" onclick="setPerson(\`${m}\`)">${m}</button>`;});
+  }
   h+=`</div></div>`;
 
   // Tabs
@@ -345,6 +371,7 @@ window.speichern=speichern;window.ladeVerlauf=ladeVerlauf;window.exportCSV=expor
 
 // Start
 render();
+ladeMitarbeiter();
 ladeHeute();
 </script>
 </body>
