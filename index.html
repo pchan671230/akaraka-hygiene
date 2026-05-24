@@ -300,10 +300,10 @@ function render(){
             const minus = e.minus!==false; // Standard: minus an (Tiefkühler ist immer Minusgrad)
             h+=`<button class="vzBtn ${minus?'minusOn':''}" onclick="toggleVorzeichen('${g.id}')">${minus?'−':'+'}</button>
               <input class="tempInput" type="number" inputmode="decimal" value="${e.betrag??''}"
-              oninput="setTempBetrag('${g.id}',this.value)" placeholder="—"/><span class="grad">°C</span>`;
+              oninput="setTempBetrag('${g.id}',this.value)" onchange="commitTemp()" placeholder="—"/><span class="grad">°C</span>`;
           }else{
             h+=`<input class="tempInput" type="number" inputmode="decimal" value="${e.wert??''}"
-              oninput="setTempWert('${g.id}',this.value)" placeholder="—"/><span class="grad">°C</span>`;
+              oninput="setTempWert('${g.id}',this.value)" onchange="commitTemp()" placeholder="—"/><span class="grad">°C</span>`;
           }
           h+=`</div></div><div class="statusZeile">`;
           if(schonDa){const r=state.heuteTemps.find(x=>x.geraet===g.id&&x.schicht===state.schicht);
@@ -374,16 +374,18 @@ function fortschritt(){
 window.setSchicht=id=>{state.schicht=id;state.tab="aufgaben";render();};
 window.setPerson=m=>{state.person=m;render();};
 window.setTab=t=>{state.tab=t;if(t==="log")ladeVerlauf();else render();};
-window.setTempWert=(id,v)=>{state.temps[id]={...state.temps[id],wert:v};render();};
-// Tiefkühler: Betrag eingeben, Vorzeichen per Button → echter Wert wird berechnet
+// Eingabe (oninput): nur Wert merken, NICHT neu rendern → Cursor bleibt im Feld
+window.setTempWert=(id,v)=>{state.temps[id]={...state.temps[id],wert:v};};
+// Tiefkühler: Betrag eingeben (oninput) – nur merken, kein render
 window.setTempBetrag=(id,v)=>{
   const cur=state.temps[id]||{};
   const minus=cur.minus!==false;
   const betrag=v;
   const wert = (betrag===""||betrag==null) ? "" : (minus? -Math.abs(+betrag) : Math.abs(+betrag));
   state.temps[id]={...cur,betrag,minus,wert:wert===""?"":String(wert)};
-  render();
 };
+// Eingabe abgeschlossen (Feld verlassen): jetzt neu rendern → Farbe/Status aktualisieren
+window.commitTemp=()=>{render();};
 window.toggleVorzeichen=(id)=>{
   const cur=state.temps[id]||{};
   const minus=!(cur.minus!==false); // umschalten
